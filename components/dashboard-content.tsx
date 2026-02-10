@@ -300,7 +300,7 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
           if (marker?.addTo && mapInstanceRef.current) {
             marker.addTo(mapInstanceRef.current)
             marker.bindPopup(`<div class="p-2 min-w-[200px]"><h3 class="font-semibold text-sm mb-2">MAC Location ${index + 1}</h3><p class="text-xs text-gray-600 mb-1"><strong>Time:</strong> ${new Date(location.timestamp).toLocaleString()}</p><p class="text-xs text-gray-600 mb-1"><strong>Coordinates:</strong> ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}</p><p class="text-xs text-gray-600 mb-1"><strong>MAC:</strong> ${location.mac_address}</p>${location.accuracy ? `<p class="text-xs text-gray-600"><strong>Accuracy:</strong> ±${location.accuracy}m</p>` : ''}</div>`)
-            marker.on('mouseover', function() { this.openPopup() })
+            marker.on('mouseover', () => { marker.openPopup() })
             markersRef.current.push(marker)
             bounds.extend([location.latitude, location.longitude])
           }
@@ -315,8 +315,8 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
           if (marker?.addTo && mapInstanceRef.current) {
             marker.addTo(mapInstanceRef.current)
             marker.bindPopup(`<div class="p-2 min-w-[200px]"><h3 class="font-semibold text-sm mb-2">GPS Point ${index + 1}</h3><p class="text-xs text-gray-600 mb-1"><strong>Time:</strong> ${new Date(location.timestamp).toLocaleString()}</p><p class="text-xs text-gray-600 mb-1"><strong>Coordinates:</strong> ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}</p>${location.speed ? `<p class="text-xs text-gray-600 mb-1"><strong>Speed:</strong> ${location.speed}</p>` : ''}${location.altitude ? `<p class="text-xs text-gray-600"><strong>Altitude:</strong> ${location.altitude}</p>` : ''}</div>`)
-            marker.on('mouseover', function() { this.openPopup(); this.setStyle({ radius: 10, weight: 3 }) })
-            marker.on('mouseout', function() { this.setStyle({ radius: 8, weight: 2 }) })
+            marker.on('mouseover', () => { marker.openPopup(); marker.setStyle({ radius: 10, weight: 3 }) })
+            marker.on('mouseout', () => { marker.setStyle({ radius: 8, weight: 2 }) })
             markersRef.current.push(marker)
             bounds.extend([location.latitude, location.longitude])
           }
