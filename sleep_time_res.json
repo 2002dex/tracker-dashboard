@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "message": "Sleep time updated and publish job queued",
+  "data": {
+    "device_id": "DEVICE_001",
+    "sleep_time": 50,
+    "topic": "tracker/sub/DEVICE_001",
+    "payload": {
+      "device_id": "DEVICE_001",
+      "sleep_time": 50
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+    "status": true,
+    "user": {
+        "id": 1,
+        "name": "Admin",
+        "email": "admin@gmail.com",
+        "role": 1,
+        "device_ids": null,
+        "email_verified_at": null,
+        "api_token": "DSPWORS05wumWEABvt979vEZi8uh8fAPSS0ZcG7dR16c1nn46WNlQfVRK6vi",
+        "created_at": null,
+        "updated_at": null
+    },
+    "message": "Login successfully"
+}

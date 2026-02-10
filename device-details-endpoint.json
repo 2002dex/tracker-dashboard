@@ -1,0 +1,64 @@
+{
+    "success": true,
+    "message": "Device data history retrieved successfully",
+    "data": {
+        "device_id": "041E7AFF0000",
+        "records": [
+            {
+                "device_id": "041E7AFF0000",
+                "device_timestamp": "2025-8-26 15:10:10",
+                "device_data": {
+                    "mac_low": "c11d89d1",
+                    "mac_high": "7abb",
+                    "rssi": " -89 dBm",
+                    "sleep_time": "10",
+                    "google_location": {
+                        "location": {
+                            "lat": 37.7749,
+                            "lng": -122.4194
+                        },
+                        "accuracy": 1200
+                    },
+                    "mac_address": "7abbc11d89d1"
+                }
+            },
+            {
+                "device_id": "041E7AFF0000",
+                "device_timestamp": "2025-08-26 15:08:40",
+                "device_data": {
+                    "msg": "online"
+                }
+            },
+            {
+                "device_id": "041E7AFF0000",
+                "device_timestamp": "2024-10-25 10:20:25",
+                "device_data": {
+                    "latitude": "22.318205 N",
+                    "longitude": "73.143272 E",
+                    "altitude": "70.599998 ",
+                    "speed": "0.114824 ",
+                    "sleep_time": "10"
+                }
+            },
+            {
+                "device_id": "041E7AFF0000",
+                "device_timestamp": "2024-10-25 10:10:25",
+                "device_data": {
+                    "latitude": "22.3178845 N",
+                    "longitude": "73.1425735 E",
+                    "altitude": "70.599998 ",
+                    "speed": "0.114824 ",
+                    "sleep_time": "10"
+                }
+            }
+        ],
+        "pagination": {
+            "current_page": 1,
+            "last_page": 1,
+            "per_page": 10,
+            "total": 5,
+            "from": 1,
+            "to": 5
+        }
+    }
+}
