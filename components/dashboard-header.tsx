@@ -186,7 +186,7 @@ export function DashboardHeader({ onLogout, selectedDeviceId, onDeviceSelect, us
                       >
                         <div className="py-1">
                           <span className="font-medium text-sm">
-                            {device.display_name}
+                            {device.display_name} ({device.device_id})
                           </span>
                         </div>
                       </SelectItem>
