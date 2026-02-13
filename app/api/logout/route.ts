@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/utils/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
           }
         });
       } catch (error) {
-        console.warn('Laravel logout endpoint failed:', error);
+        logger.warn('Laravel logout endpoint failed:', error);
         // Continue with client-side logout even if server-side fails
       }
     }
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error:', error);
     return NextResponse.json(
       { success: false, message: 'Logout failed' },
       { status: 500 }

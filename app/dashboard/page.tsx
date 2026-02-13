@@ -1,15 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardContent } from "@/components/dashboard-content"
 import { useAuth } from "@/lib/contexts/auth-context"
 
-export default function DashboardPage() {
+// Loading fallback for Suspense
+function DashboardLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center space-y-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    </div>
+  )
+}
+
+// Inner component that uses useSearchParams
+function DashboardInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, isAuthenticated, isLoading, logout } = useAuth()
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+  
+  // Initialize device ID from URL immediately
+  const initialDeviceId = searchParams.get('deviceid') || ''
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(initialDeviceId)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -18,25 +35,27 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router])
 
+  // Update URL when device selection changes
+  const handleDeviceSelect = useCallback((deviceId: string) => {
+    setSelectedDeviceId(deviceId)
+    
+    // Update URL without full page reload
+    if (deviceId) {
+      const newUrl = `/dashboard?deviceid=${encodeURIComponent(deviceId)}`
+      window.history.replaceState(null, '', newUrl)
+    } else {
+      window.history.replaceState(null, '', '/dashboard')
+    }
+  }, [])
+
   // Show loading state while checking authentication
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-        </div>
-      </div>
-    )
+    return <DashboardLoading />
   }
 
   // Should not show if not authenticated (due to redirect above)
   if (!isAuthenticated) {
     return null
-  }
-
-  const handleDeviceSelect = (deviceId: string) => {
-    setSelectedDeviceId(deviceId)
   }
 
   const handleLogout = () => {
@@ -60,5 +79,14 @@ export default function DashboardPage() {
         />
       </main>
     </div>
+  )
+}
+
+// Main export with Suspense boundary
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardInner />
+    </Suspense>
   )
 }

@@ -1,10 +1,41 @@
 import { DeviceListResponse, ProcessedDeviceForDropdown, DeviceData, DeviceDetailsResponse, ProcessedGPSLocation, ProcessedMACLocation } from '@/lib/types/api';
+import { logger } from '@/lib/utils/logger';
+
+// Pagination options for device details fetching
+export interface FetchDeviceDetailsOptions {
+  page?: number;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}
 
 class DeviceApiService {
   private baseUrl: string;
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+  }
+
+  /**
+   * Get auth token from localStorage
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('auth_token');
+  }
+
+  /**
+   * Get common headers with auth token
+   */
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    const token = this.getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
   }
 
   /**
@@ -21,12 +52,12 @@ class DeviceApiService {
         url.searchParams.append('user_id', userId);
       }
 
-      console.log('Fetching device list from:', url.toString());
+      logger.log('Fetching device list from:', url.toString());
 
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          ...this.getAuthHeaders(),
           'Cache-Control': 'max-age=300',
         },
       });
@@ -53,11 +84,11 @@ class DeviceApiService {
       }
       
       if (data.success && data.data && data.data.devices) {
-        console.log('Device list response:', data);
+        logger.log('Device list response:', data);
       }
       return data;
     } catch (error) {
-      console.error('Error fetching device list:', error);
+      logger.error('Error fetching device list:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         return {
           success: false,
@@ -76,17 +107,25 @@ class DeviceApiService {
   }
 
   /**
-   * Fetch device details from Laravel API
+   * Fetch device details from Laravel API with pagination support
+   * @param deviceId - Device ID to fetch details for
+   * @param options - Pagination and filter options
    */
-  async fetchDeviceDetails(deviceId: string): Promise<DeviceDetailsResponse> {
+  async fetchDeviceDetails(deviceId: string, options: FetchDeviceDetailsOptions = {}): Promise<DeviceDetailsResponse> {
     try {
       const url = new URL(`/api/device/details/${encodeURIComponent(deviceId)}`, this.baseUrl);
-      console.log('Fetching device details from:', url.toString());
+      
+      // Add pagination parameter
+      if (options.page && options.page > 1) {
+        url.searchParams.append('page', options.page.toString());
+      }
+      
+      logger.log('Fetching device details from:', url.toString());
 
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          ...this.getAuthHeaders(),
           'Cache-Control': 'no-cache',
         },
       });
@@ -113,7 +152,7 @@ class DeviceApiService {
       }
       return data;
     } catch (error) {
-      console.error('Error fetching device details:', error);
+      logger.error('Error fetching device details:', error);
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         return {
           success: false,
@@ -134,6 +173,74 @@ class DeviceApiService {
   }
 
   /**
+   * Fetch multiple pages of device details until limit is reached or all pages are fetched
+   * @param deviceId - Device ID to fetch details for
+   * @param options - Pagination and filter options
+   */
+  async fetchDeviceDetailsWithPagination(
+    deviceId: string, 
+    options: FetchDeviceDetailsOptions = {}
+  ): Promise<DeviceDetailsResponse> {
+    const { limit = 10, startDate, endDate } = options;
+    
+    // Fetch first page
+    const firstPageResponse = await this.fetchDeviceDetails(deviceId, { page: 1 });
+    
+    if (!firstPageResponse.success || !firstPageResponse.data) {
+      return firstPageResponse;
+    }
+
+    const allRecords = [...firstPageResponse.data.records];
+    const pagination = firstPageResponse.data.pagination;
+    
+    // If we need more records and there are more pages
+    if (limit > 10 && pagination.last_page > 1) {
+      const pagesToFetch = Math.min(
+        Math.ceil(limit / pagination.per_page),
+        pagination.last_page
+      );
+      
+      for (let page = 2; page <= pagesToFetch; page++) {
+        const pageResponse = await this.fetchDeviceDetails(deviceId, { page });
+        if (pageResponse.success && pageResponse.data?.records) {
+          allRecords.push(...pageResponse.data.records);
+        }
+        
+        // Check if we have enough records
+        if (allRecords.length >= limit) break;
+      }
+    }
+
+    // Filter by date range if specified
+    let filteredRecords = allRecords;
+    if (startDate || endDate) {
+      const fromTime = startDate ? new Date(startDate).getTime() : 0;
+      const toTime = endDate ? new Date(endDate + 'T23:59:59').getTime() : Date.now();
+      
+      filteredRecords = allRecords.filter(record => {
+        const recordTime = new Date(record.device_timestamp).getTime();
+        return recordTime >= fromTime && recordTime <= toTime;
+      });
+    }
+
+    // Apply limit
+    const limitedRecords = filteredRecords.slice(0, limit);
+
+    return {
+      success: true,
+      message: 'Device data history retrieved successfully',
+      data: {
+        device_id: deviceId,
+        records: limitedRecords,
+        pagination: {
+          ...pagination,
+          total: limitedRecords.length,
+        }
+      }
+    };
+  }
+
+  /**
    * Update device sleep time (Active Time) via Laravel API
    * @param deviceId - Device ID
    * @param sleepMinutes - Sleep time in minutes (max 255)
@@ -147,12 +254,12 @@ class DeviceApiService {
         sleep_time: String(sleepMinutes),
       };
 
-      console.log('Updating device sleep time via Laravel API:', url.toString(), payload);
+      logger.log('Updating device sleep time via Laravel API:', url.toString(), payload);
 
       const response = await fetch(url.toString(), {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
+          ...this.getAuthHeaders(),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
@@ -169,7 +276,7 @@ class DeviceApiService {
       const message: string = data.message || (success ? 'Sleep time updated successfully' : 'Failed to update sleep time');
       return { success, message };
     } catch (error) {
-      console.error('Error updating device sleep time:', error);
+      logger.error('Error updating device sleep time:', error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update device sleep time',
@@ -179,7 +286,7 @@ class DeviceApiService {
 
   /**
    * Process device data for dropdown display
-   * Includes status field from API
+   * Includes status field and battery from API
    */
   processDevicesForDropdown(devices: DeviceData[]): ProcessedDeviceForDropdown[] {
     return devices.map(device => {
@@ -188,9 +295,13 @@ class DeviceApiService {
         displayName = device.device_id;
       }
 
-      // sleep_time in minutes
-      const sleepTimeStr = device.device_details?.sleep_time;
+      // sleep_time in minutes - check both sleep and sleep_time fields
+      const sleepTimeStr = device.device_details?.sleep || device.device_details?.sleep_time;
       const sleepTime = sleepTimeStr ? parseInt(sleepTimeStr, 10) : undefined;
+      
+      // Get battery percentage from device_details
+      const batteryStr = device.device_details?.battery;
+      const battery = batteryStr ? parseInt(batteryStr, 10) : '51'; // Default to '51' 
       
       return {
         device_id: device.device_id,
@@ -199,17 +310,20 @@ class DeviceApiService {
         connection_status: 'disconnected' as const,
         sleep_time: !isNaN(sleepTime as number) ? sleepTime : undefined,
         status: device.device_status, // pass through status from API
+        battery: battery !== undefined && !isNaN(battery) ? battery : undefined,
       };
     });
   }
 
   /**
    * Get sleep_time (in minutes) from a specific device in device list
+   * Checks both 'sleep' and 'sleep_time' fields
    */
   getDeviceSleepTimeFromList(devices: DeviceData[], deviceId: string): number | null {
     const device = devices.find(d => d.device_id === deviceId);
-    if (!device?.device_details?.sleep_time) return null;
-    const sleepTime = parseInt(device.device_details.sleep_time, 10);
+    const sleepStr = device?.device_details?.sleep || device?.device_details?.sleep_time;
+    if (!sleepStr) return null;
+    const sleepTime = parseInt(sleepStr, 10);
     return isNaN(sleepTime) ? null : sleepTime;
   }
 
@@ -224,14 +338,29 @@ class DeviceApiService {
   }
 
   /**
+   * Get battery percentage from a specific device in device list
+   * @returns battery percentage (0-100) or null if not available
+   */
+  getDeviceBatteryFromList(devices: DeviceData[], deviceId: string): number | null {
+    const device = devices.find(d => d.device_id === deviceId);
+    const batteryStr = device?.device_details?.battery;
+    if (!batteryStr) return null;
+    const battery = parseInt(batteryStr, 10);
+    return isNaN(battery) ? null : battery;
+  }
+
+  /**
    * Extract sleep_time from device details records (most recent)
+   * Checks both 'sleep' and 'sleep_time' fields
    */
   extractSleepTimeFromDetails(deviceDetails: DeviceDetailsResponse): number | null {
     if (!deviceDetails.success || !deviceDetails.data?.records) return null;
 
     for (const record of deviceDetails.data.records) {
-      if (record.device_data?.sleep_time) {
-        const sleepTime = parseInt(record.device_data.sleep_time, 10);
+      // Check for new 'sleep' field first, then fall back to 'sleep_time'
+      const sleepStr = record.device_data?.sleep || record.device_data?.sleep_time;
+      if (sleepStr) {
+        const sleepTime = parseInt(sleepStr, 10);
         if (!isNaN(sleepTime)) return sleepTime;
       }
     }
@@ -248,7 +377,7 @@ class DeviceApiService {
 
       const response = await fetch(url.toString(), {
         method: 'POST',
-        headers: { 'Accept': 'application/json' },
+        headers: this.getAuthHeaders(),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -316,15 +445,23 @@ class DeviceApiService {
     const hasMacLow = deviceData.mac_low !== undefined;
     const hasMacHigh = deviceData.mac_high !== undefined;
     const hasMacAddress = deviceData.mac_address !== undefined;
+    const hasMacAddr = deviceData.mac_addr !== undefined; // New format
     const hasGoogleLocation = deviceData.google_location !== undefined;
-    return (hasLatitude && hasLongitude) && !(hasMacLow || hasMacHigh || hasMacAddress || hasGoogleLocation);
+    const hasApiLoc = deviceData.api_loc !== undefined; // New format
+    return (hasLatitude && hasLongitude) && !(hasMacLow || hasMacHigh || hasMacAddress || hasGoogleLocation || hasMacAddr || hasApiLoc);
   }
 
   private hasMACLocationData(deviceData: any): boolean {
     const hasMacAddress = deviceData.mac_address !== undefined;
+    const hasMacAddr = deviceData.mac_addr !== undefined && Array.isArray(deviceData.mac_addr); // New format
     const hasGoogleLocation = deviceData.google_location !== undefined && deviceData.google_location.location !== undefined;
+    const hasApiLoc = deviceData.api_loc !== undefined && deviceData.api_loc.location !== undefined; // New format
     const hasMacFields = (deviceData.mac_low !== undefined && deviceData.mac_high !== undefined);
-    return (hasMacAddress || hasMacFields) && hasGoogleLocation;
+    
+    // Support new api_loc format or legacy google_location format
+    const hasLocation = hasGoogleLocation || hasApiLoc;
+    const hasMac = hasMacAddress || hasMacFields || hasMacAddr;
+    return hasMac && hasLocation;
   }
 
   private parseGPSFromDeviceData(record: any, deviceId: string): ProcessedGPSLocation | null {
@@ -349,26 +486,57 @@ class DeviceApiService {
 
   private parseMACFromDeviceData(record: any, deviceId: string): ProcessedMACLocation | null {
     const { device_data, device_timestamp } = record;
-    if (!device_data.google_location?.location) return null;
     
     try {
-      const { lat, lng } = device_data.google_location.location;
-      const accuracy = device_data.google_location.accuracy;
-      let macAddress = device_data.mac_address;
-      if (!macAddress && device_data.mac_high && device_data.mac_low) {
-        macAddress = `${device_data.mac_high}${device_data.mac_low}`.toUpperCase();
+      let lat: number;
+      let lng: number;
+      let accuracy: number | undefined;
+      let locationSource: 'google' | 'api' | 'estimated' = 'google';
+      
+      // Check for new api_loc format first
+      if (device_data.api_loc?.location) {
+        lat = device_data.api_loc.location.lat;
+        lng = device_data.api_loc.location.lng;
+        accuracy = device_data.api_loc.accuracy;
+        locationSource = 'api';
+      } else if (device_data.google_location?.location) {
+        // Fall back to legacy google_location format
+        lat = device_data.google_location.location.lat;
+        lng = device_data.google_location.location.lng;
+        accuracy = device_data.google_location.accuracy;
+        locationSource = 'google';
+      } else {
+        return null;
       }
-      if (!macAddress || typeof lat !== 'number' || typeof lng !== 'number') return null;
+      
+      // Get MAC addresses - support new mac_addr array or legacy formats
+      let macAddress: string;
+      let macAddresses: string[] | undefined;
+      
+      if (device_data.mac_addr && Array.isArray(device_data.mac_addr)) {
+        // New format: array of MAC addresses from access points
+        macAddresses = device_data.mac_addr;
+        macAddress = device_data.mac_addr[0] || 'Unknown';
+      } else if (device_data.mac_address) {
+        macAddress = device_data.mac_address;
+      } else if (device_data.mac_high && device_data.mac_low) {
+        macAddress = `${device_data.mac_high}${device_data.mac_low}`.toUpperCase();
+      } else {
+        macAddress = 'Unknown';
+      }
+      
+      if (typeof lat !== 'number' || typeof lng !== 'number') return null;
       
       return {
         timestamp: device_data.timestamp || device_timestamp,
         latitude: lat,
         longitude: lng,
         mac_address: macAddress,
+        mac_addresses: macAddresses,
         rssi: device_data.rssi,
         accuracy: accuracy,
         device_id: deviceId,
-        location_source: 'google' as const
+        location_source: locationSource
       };
     } catch { return null; }
   }

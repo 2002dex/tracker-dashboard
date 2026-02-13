@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { LogOut, RefreshCw, AlertCircle, Train } from "lucide-react"
+import { LogOut, RefreshCw, AlertCircle, Train, Battery, BatteryLow, BatteryMedium, BatteryFull, BatteryWarning } from "lucide-react"
 import { useDeviceList } from '@/hooks/use-device-list'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { cn } from '@/lib/utils'
@@ -59,6 +59,23 @@ export function DashboardHeader({ onLogout, selectedDeviceId, onDeviceSelect, us
       case 3: return 'ESPNow Admin'
       default: return 'User'
     }
+  }
+
+  // Get battery icon and color based on percentage
+  const getBatteryInfo = (battery: number | undefined) => {
+    if (battery === undefined || battery === null) {
+      return { icon: Battery, color: 'text-muted-foreground', label: 'N/A' }
+    }
+    if (battery <= 10) {
+      return { icon: BatteryWarning, color: 'text-red-500', label: `${battery}%` }
+    }
+    if (battery <= 25) {
+      return { icon: BatteryLow, color: 'text-orange-500', label: `${battery}%` }
+    }
+    if (battery <= 60) {
+      return { icon: BatteryMedium, color: 'text-yellow-500', label: `${battery}%` }
+    }
+    return { icon: BatteryFull, color: 'text-green-500', label: `${battery}%` }
   }
 
   const handleLogout = async () => {
@@ -177,20 +194,30 @@ export function DashboardHeader({ onLogout, selectedDeviceId, onDeviceSelect, us
                 {/* Device list */}
                 {!isLoadingDevices && !deviceError && devices.length > 0 && (
                   <>
-                    {/* Device list showing device_name (device_id) format */}
-                    {devices.filter(device => device.device_type?.toLowerCase() === 'dsp_tracker').map((device) => (
-                      <SelectItem 
-                        key={device.device_id} 
-                        value={device.device_id} 
-                        className="cursor-pointer hover:bg-accent/50 focus:bg-accent/50 transition-colors"
-                      >
-                        <div className="py-1">
-                          <span className="font-medium text-sm">
-                            {device.display_name} ({device.device_id})
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {/* Device list showing device_name (device_id) with battery */}
+                    {devices.filter(device => device.device_type?.toLowerCase() === 'dsp_tracker').map((device) => {
+                      const batteryInfo = getBatteryInfo(device.battery)
+                      const BatteryIcon = batteryInfo.icon
+                      return (
+                        <SelectItem 
+                          key={device.device_id} 
+                          value={device.device_id} 
+                          className="cursor-pointer hover:bg-accent/50 focus:bg-accent/50 transition-colors"
+                        >
+                          <div className="flex items-center justify-between w-full gap-2 py-1">
+                            <span className="font-medium text-sm truncate">
+                              {device.display_name} ({device.device_id})
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <BatteryIcon className={cn("h-4 w-4", batteryInfo.color)} />
+                              <span className={cn("text-xs", batteryInfo.color)}>
+                                {batteryInfo.label}
+                              </span>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
                   </>
                 )}
               </SelectContent>

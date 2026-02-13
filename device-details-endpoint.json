@@ -6,20 +6,22 @@
         "records": [
             {
                 "device_id": "041E7AFF0000",
-                "device_timestamp": "2025-8-26 15:10:10",
+                "device_timestamp": "2026-02-12 13:16:59",
                 "device_data": {
-                    "mac_low": "c11d89d1",
-                    "mac_high": "7abb",
-                    "rssi": " -89 dBm",
-                    "sleep_time": "10",
-                    "google_location": {
+                    "sleep_time": "30",
+                    "battery": "51",
+                    "api_loc": {
                         "location": {
-                            "lat": 37.7749,
-                            "lng": -122.4194
+                            "lat": 19.0909687,
+                            "lng": 72.9166813
                         },
-                        "accuracy": 1200
+                        "accuracy": 38.529
                     },
-                    "mac_address": "7abbc11d89d1"
+                    "mac_addr": [
+                        "12:27:F5:A8:B4:6B",
+                        "F2:ED:B8:D9:B3:C8",
+                        "74:FE:CE:65:0E:BE"
+                    ]
                 }
             },
             {
@@ -27,6 +29,26 @@
                 "device_timestamp": "2025-08-26 15:08:40",
                 "device_data": {
                     "msg": "online"
+                }
+            },
+            {
+                "device_id": "041E7AFF0000",
+                "device_timestamp": "2026-02-12 13:16:28",
+                "device_data": {
+                    "sleep_time": "30",
+                    "battery": "51",
+                    "api_loc": {
+                        "location": {
+                            "lat": 19.0909687,
+                            "lng": 72.9166813
+                        },
+                        "accuracy": 38.529
+                    },
+                    "mac_addr": [
+                        "12:27:F5:A8:B4:6B",
+                        "F2:ED:B8:D9:B3:C8",
+                        "74:FE:CE:65:0E:BE"
+                    ]
                 }
             },
             {

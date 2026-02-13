@@ -1,5 +1,14 @@
 // Types based on Laravel API device-list endpoint response format
 
+// API location data from MAC-based geolocation
+export interface ApiLocation {
+  location: {
+    lat: number;
+    lng: number;
+  };
+  accuracy: number;
+}
+
 // Device details containing location and sleep_time info
 export interface DeviceDetailsInfo {
   latitude?: string;
@@ -7,10 +16,14 @@ export interface DeviceDetailsInfo {
   altitude?: string;
   speed?: string;
   sleep_time?: string;
+  sleep?: string; // New field for sleep time
+  battery?: string;
   mac_low?: string;
   mac_high?: string;
   rssi?: string;
   mac_address?: string;
+  mac_addr?: string[]; // New field: array of MAC addresses (up to 3 access points)
+  api_loc?: ApiLocation; // New field: MAC-based geolocation
   google_location?: {
     location: {
       lat: number;
@@ -60,12 +73,18 @@ export interface DeviceDetailsRecord {
     longitude?: string;
     altitude?: string;
     speed?: string;
-    // MAC address fields
+    // MAC address fields (legacy)
     mac_low?: string;
     mac_high?: string;
     mac_address?: string;
+    // New MAC address array (3 access points)
+    mac_addr?: string[];
+    // Sleep time fields
     sleep_time?: string;
-    // Google location data from MAC address
+    sleep?: string; // New field for sleep time
+    // MAC-based geolocation (new format)
+    api_loc?: ApiLocation;
+    // Google location data from MAC address (legacy)
     google_location?: {
       location: {
         lat: number;
@@ -115,10 +134,11 @@ export interface ProcessedMACLocation {
   latitude: number;
   longitude: number;
   mac_address: string;
+  mac_addresses?: string[]; // All MAC addresses from access points
   rssi?: string;
   accuracy?: number;
   device_id: string;
-  location_source: 'google' | 'estimated';
+  location_source: 'google' | 'api' | 'estimated';
 }
 
 // Processed device for dropdown display
@@ -129,6 +149,7 @@ export interface ProcessedDeviceForDropdown {
   connection_status: 'connected' | 'disconnected';
   sleep_time?: number; 
   status?: number; // 0 = pending, 1 = idle/active
+  battery?: number; // Battery percentage (0-100)
 }
 
 // Sleep time sync status for UI display

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { deviceApi } from '@/lib/services/device-api';
 import { ProcessedDeviceForDropdown, DeviceData } from '@/lib/types/api';
+import { logger } from '@/lib/utils/logger';
 
 interface UseDeviceListOptions {
   userId?: string;
@@ -20,6 +21,7 @@ interface UseDeviceListReturn {
   retryFetch: () => Promise<void>;
   getDeviceSleepTime: (deviceId: string) => number | null;
   getDeviceStatus: (deviceId: string) => number | null;
+  getDeviceBattery: (deviceId: string) => number | null;
 }
 
 export function useDeviceList(options: UseDeviceListOptions = {}): UseDeviceListReturn {
@@ -45,14 +47,14 @@ export function useDeviceList(options: UseDeviceListOptions = {}): UseDeviceList
         setUserRole(null);
         setTotalCount(response.data.total_count);
         setLastUpdated(new Date().toISOString());
-        console.log(`Loaded ${processedDevices.length} devices`);
+        logger.log(`Loaded ${processedDevices.length} devices`);
       } else {
         throw new Error(response.message || 'Failed to fetch device list');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
-      console.error('Error in useDeviceList:', errorMessage);
+      logger.error('Error in useDeviceList:', errorMessage);
       setDevices([]);
       setRawDevices([]);
       setUserRole(null);
@@ -80,6 +82,11 @@ export function useDeviceList(options: UseDeviceListOptions = {}): UseDeviceList
   // Get status for a specific device (0=pending, 1=idle/active)
   const getDeviceStatus = useCallback((deviceId: string): number | null => {
     return deviceApi.getDeviceStatusFromList(rawDevices, deviceId);
+  }, [rawDevices]);
+
+  // Get battery percentage for a specific device
+  const getDeviceBattery = useCallback((deviceId: string): number | null => {
+    return deviceApi.getDeviceBatteryFromList(rawDevices, deviceId);
   }, [rawDevices]);
 
   useEffect(() => {
@@ -116,5 +123,6 @@ export function useDeviceList(options: UseDeviceListOptions = {}): UseDeviceList
     retryFetch,
     getDeviceSleepTime,
     getDeviceStatus,
+    getDeviceBattery,
   };
 }

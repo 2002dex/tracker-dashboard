@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useAuth } from '@/lib/contexts/auth-context'
+import { logger } from '@/lib/utils/logger'
 
 interface LoginPageProps {
   onLogin: () => void
@@ -58,7 +59,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError('Login failed. Please check your credentials.')
       }
     } catch (err) {
-      console.error('Login request failed:', err)
+      logger.error('Login request failed:', err)
       setError('Network error. Please check your internet connection and try again.')
     } finally {
       setIsLoading(false)

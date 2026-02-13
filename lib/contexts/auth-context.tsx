@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 interface User {
   id: number;
@@ -88,14 +89,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
           }
         } catch (err) {
-          console.warn('Auth validation failed:', err);
+          logger.warn('Auth validation failed:', err);
         }
       }
 
       // No valid auth present
       setIsAuthenticated(false);
     } catch (error) {
-      console.error('Error checking auth status:', error);
+      logger.error('Error checking auth status:', error);
       // Clear invalid token
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
@@ -162,7 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       throw new Error(data.message || 'Login failed');
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       return false;
     }
   };

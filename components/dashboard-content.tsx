@@ -20,6 +20,7 @@ import { deviceApi } from '@/lib/services/device-api'
 import { ProcessedGPSLocation, ProcessedMACLocation, DeviceDetailsResponse, SleepTimeSyncStatus } from '@/lib/types/api'
 import { useDeviceList } from '@/hooks/use-device-list'
 import { toast } from '@/hooks/use-toast'
+import { logger } from '@/lib/utils/logger'
 
 // Filter types
 type FilterType = 'last10' | 'last20' | 'last50' | 'custom' | 'date'
@@ -57,13 +58,10 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
   /// Active time settings state (stored in minutes)
   const [activeTime, setActiveTime] = useState<number>(10)
   const [newActiveTime, setNewActiveTime] = useState<string>('') // HH:MM format
-  // Per-device active time map (minutes) so switching devices restores their own value
-  const [deviceActiveTimes, setDeviceActiveTimes] = useState<Record<string, number>>({})
-  
   
   // Sleep time sync status: determined by device status field
   const [sleepTimeSyncStatus, setSleepTimeSyncStatus] = useState<SleepTimeSyncStatus>('idle')
-  // Expected sleep_time value after update (in seconds)
+  // Expected sleep_time value after update (in minutes)
   const [pendingSleepTime, setPendingSleepTime] = useState<number | null>(null)
   const [isEditingActiveTime, setIsEditingActiveTime] = useState(false)
   const [isSavingActiveTime, setIsSavingActiveTime] = useState(false)
@@ -129,8 +127,11 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
     return { gps: filteredGPS, mac: filteredMAC }
   }, [gpsLocations, macLocations, filterType, customCount, dateFrom, dateTo])
 
-  // Fetch GPS locations from Laravel API for selected device
-  const fetchDeviceLocations = useCallback(async (deviceId: string) => {
+  // Fetch GPS locations from Laravel API for selected device with pagination support
+  const fetchDeviceLocations = useCallback(async (
+    deviceId: string,
+    options: { limit?: number; startDate?: string; endDate?: string } = {}
+  ) => {
     if (!deviceId) {
       setGpsLocations([])
       setMacLocations([])
@@ -143,7 +144,19 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
     setError(null)
     
     try {
-      const deviceDetailsResponse = await deviceApi.fetchDeviceDetails(deviceId)
+      // Determine limit based on filter type
+      const limit = options.limit || 10
+      
+      logger.log('Fetching device locations with options:', { deviceId, limit, ...options })
+      
+      // Use paginated fetch for larger requests
+      const deviceDetailsResponse = limit > 10 || options.startDate || options.endDate
+        ? await deviceApi.fetchDeviceDetailsWithPagination(deviceId, {
+            limit,
+            startDate: options.startDate,
+            endDate: options.endDate,
+          })
+        : await deviceApi.fetchDeviceDetails(deviceId)
       
       if (deviceDetailsResponse.success && deviceDetailsResponse.data) {
         setDeviceDetails(deviceDetailsResponse)
@@ -153,10 +166,12 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
         setMacLocations(macLocs)
         const mostRecentTime = deviceApi.getLastActiveTime(deviceDetailsResponse)
         setLastActiveTime(mostRecentTime)
+        logger.log('Fetched locations:', { gps: gpsLocs.length, mac: macLocs.length })
       } else {
         throw new Error(deviceDetailsResponse.message || 'Failed to fetch device details')
       }
     } catch (error) {
+      logger.error('Error fetching device locations:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch device locations')
       setGpsLocations([])
       setMacLocations([])
@@ -227,7 +242,7 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
     }
   }, [])
 
-  // Initialize map
+  // Initialize map with robust size handling
   const initializeMap = useCallback(() => {
     if (!mapLoaded || !mapRef.current || mapInstanceRef.current) return
 
@@ -246,7 +261,16 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
       }).addTo(map)
 
       mapInstanceRef.current = map
-      setTimeout(() => { mapInstanceRef.current?.invalidateSize(true) }, 100)
+      
+      // Multiple invalidateSize calls to ensure proper rendering
+      const invalidateTimes = [50, 150, 300, 500, 1000]
+      invalidateTimes.forEach(delay => {
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize(true)
+          }
+        }, delay)
+      })
     } catch {
       setError('Failed to initialize map.')
     }
@@ -337,51 +361,110 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
 
   useEffect(() => {
     if (mapLoaded && mapRef.current) {
-      const timer = setTimeout(() => initializeMap(), 100)
-      return () => clearTimeout(timer)
+      // Use requestAnimationFrame to ensure DOM is ready
+      const rafId = requestAnimationFrame(() => {
+        const timer = setTimeout(() => initializeMap(), 50)
+        return () => clearTimeout(timer)
+      })
+      return () => cancelAnimationFrame(rafId)
     }
   }, [mapLoaded, initializeMap])
 
   useEffect(() => {
     if (selectedDeviceId && mapLoaded && mapRef.current) {
       if (!mapInstanceRef.current) {
-        const timer = setTimeout(() => initializeMap(), 300)
+        // Initialize map if not yet initialized
+        const timer = setTimeout(() => initializeMap(), 100)
         return () => clearTimeout(timer)
       } else {
-        const timer = setTimeout(() => { mapInstanceRef.current?.invalidateSize(true) }, 100)
-        return () => clearTimeout(timer)
+        // Force multiple invalidateSize calls to ensure proper rendering
+        const invalidateTimes = [0, 100, 250, 500]
+        const timers = invalidateTimes.map(delay => 
+          setTimeout(() => {
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.invalidateSize(true)
+            }
+          }, delay)
+        )
+        return () => timers.forEach(t => clearTimeout(t))
       }
     }
   }, [selectedDeviceId, mapLoaded, initializeMap])
 
+  // Compute the limit based on filter type
+  const getFilterLimit = useCallback(() => {
+    switch (filterType) {
+      case 'last20': return 20
+      case 'last50': return 50
+      case 'custom': return customCount
+      case 'date': return 100 // Fetch more for date filtering, filter client-side
+      default: return 10
+    }
+  }, [filterType, customCount])
+
   useEffect(() => {
     if (selectedDeviceId) {
-      fetchDeviceLocations(selectedDeviceId)
+      const limit = getFilterLimit()
+      const options: { limit?: number; startDate?: string; endDate?: string } = { limit }
+      
+      // For date range filtering, pass date parameters
+      if (filterType === 'date') {
+        if (dateFrom) options.startDate = dateFrom
+        if (dateTo) options.endDate = dateTo
+      }
+      
+      fetchDeviceLocations(selectedDeviceId, options)
     } else {
       clearMarkers()
       setGpsLocations([])
       setMacLocations([])
     }
-  }, [selectedDeviceId, fetchDeviceLocations, clearMarkers])
+  }, [selectedDeviceId, filterType, customCount, dateFrom, dateTo, fetchDeviceLocations, clearMarkers, getFilterLimit])
 
   useEffect(() => {
     if (mapLoaded && mapInstanceRef.current) {
       if (filteredLocations.gps.length > 0 || filteredLocations.mac.length > 0) {
+        // Ensure map is properly sized before adding markers
         mapInstanceRef.current.invalidateSize(true)
-        setTimeout(() => addAllLocationsToMap(filteredLocations.gps, filteredLocations.mac), 100)
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize(true)
+            addAllLocationsToMap(filteredLocations.gps, filteredLocations.mac)
+          }
+        }, 150)
       } else {
         clearMarkers()
       }
     }
   }, [filteredLocations, mapLoaded, addAllLocationsToMap, clearMarkers])
 
+  // Handle window resize and container resize with ResizeObserver
   useEffect(() => {
     const handleResize = () => {
-      if (mapInstanceRef.current) setTimeout(() => mapInstanceRef.current.invalidateSize(true), 100)
+      if (mapInstanceRef.current) {
+        setTimeout(() => mapInstanceRef.current?.invalidateSize(true), 100)
+      }
     }
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+    
+    // Use ResizeObserver for more reliable container size detection
+    let resizeObserver: ResizeObserver | null = null
+    if (mapRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize(true)
+        }
+      })
+      resizeObserver.observe(mapRef.current)
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      }
+    }
+  }, [mapLoaded])
 
   // Utility: convert minutes to HH:MM
   const formatMinutesToHHMM = useCallback((minutes: number): string => {
@@ -475,14 +558,14 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
   useEffect(() => {
     if (!selectedDeviceId) return
 
-    // Get sleep_time from device-list API (now in seconds)
+    // Get sleep_time from device-list API
     const apiSleepTime = getDeviceSleepTime(selectedDeviceId)
     if (apiSleepTime !== null) {
       setActiveTime(apiSleepTime)
       setNewActiveTime(formatMinutesToHHMM(apiSleepTime))
     } else {
-      setActiveTime(10) // default 10 minutes
-      setNewActiveTime(formatMinutesToHHMM(10))
+      setActiveTime(30) // default 30 minutes
+      setNewActiveTime(formatMinutesToHHMM(30))
     }
 
     // Determine sync status from device status field
@@ -540,7 +623,7 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
       setCopiedDeviceId(true)
       setTimeout(() => setCopiedDeviceId(false), 2000)
     } catch (error) {
-      console.error('Failed to copy device ID:', error)
+      logger.error('Failed to copy device ID:', error)
     }
   }, [])
 
@@ -633,7 +716,7 @@ export function DashboardContent({ selectedDeviceId, onDeviceSelect, userId }: D
                 <div>
                   <Label className="text-sm font-medium">Device Name</Label>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="font-medium">{selectedDevice.display_name}</span>
+                    <span className="font-medium">{selectedDevice.display_name} ({selectedDevice.device_id})</span>
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Button
                         variant="ghost"
