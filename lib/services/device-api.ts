@@ -301,7 +301,7 @@ class DeviceApiService {
       
       // Get battery percentage from device_details
       const batteryStr = device.device_details?.battery;
-      const battery = batteryStr ? parseInt(batteryStr, 10) : '51'; // Default to '51' 
+      const battery = batteryStr ? parseInt(batteryStr, 10) : 51; // Default to 51 
       
       return {
         device_id: device.device_id,
